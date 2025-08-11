@@ -2,81 +2,215 @@
 <html lang="id">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Face Detection & Age/Gender — Demo</title>
   <style>
-    :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8;color-scheme:dark}
-    body{margin:0;font-family:Inter,Segoe UI,Roboto,system-ui,Arial;background:linear-gradient(180deg,#071127 0%, #071428 100%);color:#e6eef8;display:flex;gap:18px;min-height:100vh;align-items:flex-start;padding:24px}
-    .card{background:rgba(255,255,255,0.03);padding:14px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);width:760px}
-    h1{margin:0 0 8px;font-size:20px}
-    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-    button,input[type=file]{padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
-    button.primary{background:var(--accent);color:#042029;border:none}
-    #videoWrap{position:relative;width:720px;height:560px;background:#000;border-radius:8px;overflow:hidden}
-    video{width:100%;height:100%;object-fit:cover}
-    canvas{position:absolute;left:0;top:0}
-    .log{margin-top:12px;font-size:13px;color:var(--muted)}
-    .side{width:320px}
-    .info{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px}
-    .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,0.03)}
-    small{color:var(--muted)}
-    a.link{color:var(--accent);text-decoration:none}
-    footer{margin-top:12px;font-size:12px;color:var(--muted)}
-    .badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#06232a;color:#c7fff9;font-size:12px}
+    :root {
+      --bg: #0f1724;
+      --card: #0b1220;
+      --accent: #06b6d4;
+      --muted: #94a3b8;
+      color-scheme: dark;
+    }
+
+    /* Reset & base */
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Roboto, system-ui, Arial, sans-serif;
+      background: linear-gradient(180deg, #071127 0%, #071428 100%);
+      color: #e6eef8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px;
+      gap: 16px;
+    }
+
+    /* Container card */
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(2, 6, 23, 0.6);
+      width: 100%;
+      max-width: 720px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 1.5rem;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+    button,
+    input[type=file] + button {
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: transparent;
+      color: inherit;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.25s, color 0.25s;
+      min-width: 120px;
+      user-select: none;
+    }
+    button.primary {
+      background: var(--accent);
+      color: #042029;
+      border: none;
+    }
+    button:hover {
+      background: var(--accent);
+      color: #042029;
+      border: none;
+    }
+
+    /* Video container */
+    #videoWrap {
+      position: relative;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      width: 100%;
+      max-width: 720px;
+      aspect-ratio: 16 / 12; /* Maintain ratio for video & canvas */
+    }
+    video, canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 12px;
+    }
+
+    /* Log and info */
+    .log {
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--muted);
+      text-align: center;
+      user-select: none;
+    }
+    .info {
+      background: rgba(255, 255, 255, 0.02);
+      padding: 14px 18px;
+      border-radius: 10px;
+      max-width: 720px;
+      width: 100%;
+      box-sizing: border-box;
+      user-select: none;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.03);
+      font-size: 1rem;
+    }
+
+    footer {
+      margin-top: 18px;
+      font-size: 13px;
+      color: var(--muted);
+      max-width: 720px;
+      width: 100%;
+      text-align: center;
+      user-select: none;
+      padding: 0 12px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #06232a;
+      color: #c7fff9;
+      font-size: 13px;
+      user-select: none;
+      align-self: center;
+    }
+
+    /* Hide default file input */
+    input[type=file] {
+      display: none;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 480px) {
+      body {
+        padding: 12px 6px;
+      }
+      .card {
+        padding: 12px;
+        max-width: 100%;
+      }
+      button, input[type=file] + button {
+        min-width: 100%;
+        font-size: 1.1rem;
+      }
+      .controls {
+        gap: 8px;
+      }
+      .row {
+        font-size: 1.05rem;
+      }
+      #videoWrap {
+        aspect-ratio: 4 / 3;
+        max-width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="card">
+  <div class="card" role="main" aria-label="Face Detection Application">
     <h1>Face Detection — Age & Gender (client-side)</h1>
-    <div class="controls">
-      <button id="startCam" class="primary">Start Camera</button>
-      <button id="stopCam">Stop Camera</button>
+    <div class="controls" role="region" aria-label="Control buttons">
+      <button id="startCam" class="primary" aria-pressed="false" aria-label="Start Camera">Start Camera</button>
+      <button id="stopCam" aria-label="Stop Camera">Stop Camera</button>
       <label>
-        <input type="file" id="imageUpload" accept="image/*" style="display:none">
-        <button id="openImage">Open Image</button>
+        <input type="file" id="imageUpload" accept="image/*" aria-label="Upload Image for analysis" />
+        <button id="openImage" aria-haspopup="dialog">Open Image</button>
       </label>
-      <button id="capture">Capture Snapshot</button>
-      <button id="download" title="Download overlay as PNG">Download Result</button>
+      <button id="capture" aria-label="Capture Snapshot">Capture Snapshot</button>
+      <button id="download" title="Download overlay as PNG" aria-label="Download Result">Download Result</button>
       <div style="flex:1"></div>
-      <div class="badge">face-api.js (client)</div>
+      <div class="badge" aria-live="polite">face-api.js (client)</div>
     </div>
 
-    <div id="videoWrap">
+    <div id="videoWrap" aria-live="polite" aria-atomic="true">
       <video id="inputVideo" autoplay muted playsinline></video>
       <canvas id="overlay"></canvas>
     </div>
 
     <div class="log" id="log">Model status: <strong id="status">Not loaded</strong></div>
 
-    <div class="info" style="margin-top:12px">
+    <div class="info" aria-live="polite" aria-atomic="true" style="margin-top:12px">
       <div class="row"><div>Detected faces</div><div id="faceCount">0</div></div>
       <div class="row"><div>Average age (smoothed)</div><div id="avgAge">—</div></div>
       <div class="row"><div>Last result</div><div id="lastResult">—</div></div>
     </div>
 
     <footer>
-      <div>Catatan singkat: Aplikasi ini berjalan 100% di browser. Anda harus menyediakan file-model (folder <code>/models</code>) yang berisi model-model dari <code>face-api.js</code> (ageGender, tiny_face_detector, face_landmark_68, face_expression).</div>
+      <div>
+        Catatan singkat: Aplikasi ini berjalan 100% di browser. Anda harus menyediakan file-model (folder <code>/models</code>) yang berisi model-model dari <code>face-api.js</code> (ageGender, tiny_face_detector, face_landmark_68, face_expression).
+      </div>
     </footer>
-  </div>
-
-  <div class="side">
-    <div class="card info">
-      <h3>Petunjuk pemasangan model</h3>
-      <ol>
-        <li>Download model pre-trained untuk <code>face-api.js</code> (mis. dari repository <em>justadudewhohacks/face-api.js</em>).</li>
-        <li>Tempatkan semua files model di folder <code>/models</code> pada lokasi yang sama dengan file HTML ini ketika disajikan (server/local).</li>
-        <li>Atau gunakan hosting model remote dan ubah <code>MODEL_URL</code> di kode JavaScript sesuai.</li>
-      </ol>
-      <h4>Fitur</h4>
-      <ul>
-        <li>Deteksi wajah realtime dari webcam</li>
-        <li>Estimasi usia (dengan smoothing)</li>
-        <li>Estimasi jenis kelamin</li>
-        <li>Ekspresi wajah (smile, sad, dll.)</li>
-        <li>Upload gambar & analisis</li>
-        <li>Snapshot & download hasil</li>
-      </ul>
-    </div>
   </div>
 
   <script src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
@@ -156,15 +290,19 @@
         expressions: r.expressions || {}
       }))
 
-      drawDetections(annotated)
+           drawDetections(annotated)
       faceCountEl.textContent = annotated.length
 
       if(annotated.length > 0){
-        const ages = annotated.map(a=>a.age)
-        const avg = pushAge(ages.reduce((s,v)=>s+v,0)/ages.length)
+        const ages = annotated.map(a => a.age)
+        const avg = pushAge(ages.reduce((s,v) => s + v, 0) / ages.length)
         avgAgeEl.textContent = `${avg.toFixed(1)} years`
-        lastResultEl.textContent = `${annotated.length} face(s) — ${annotated[0].gender} — ${Object.keys(annotated[0].expressions).reduce((a,b)=> annotated[0].expressions[a]>annotated[0].expressions[b]?a:b)}`
+        const topExp = Object.keys(annotated[0].expressions).reduce((a,b) =>
+          annotated[0].expressions[a] > annotated[0].expressions[b] ? a : b
+        )
+        lastResultEl.textContent = `${annotated.length} face(s) — ${annotated[0].gender} — ${topExp}`
       } else {
+        avgAgeEl.textContent = '—'
         lastResultEl.textContent = 'No faces'
       }
     }
@@ -177,11 +315,11 @@
         await video.play()
         canvas.width = video.videoWidth
         canvas.height = video.videoHeight
-        detectionInterval = setInterval(async ()=>{
+        detectionInterval = setInterval(async () => {
           if(video.readyState < 2) return
           await analyzeFrame(video)
         }, 300)
-      }catch(err){
+      } catch(err) {
         alert('Gagal mengakses kamera: ' + err.message)
         console.error(err)
       }
@@ -189,7 +327,7 @@
 
     function stopCamera(){
       if(stream){
-        stream.getTracks().forEach(t=>t.stop())
+        stream.getTracks().forEach(t => t.stop())
         stream = null
       }
       if(detectionInterval) clearInterval(detectionInterval)
@@ -204,19 +342,21 @@
       if(uploaded) uploaded.remove()
     }
 
-    imageUpload.addEventListener('change', async ()=>{
+    imageUpload.addEventListener('change', async () => {
       const file = imageUpload.files[0]
       if(!file) return
       const img = await faceapi.bufferToImage(file)
       const ctx = canvas.getContext('2d')
-      const w = Math.min(1280, img.width)
-      const h = Math.round(img.height * (w/img.width))
+      const maxWidth = 720
+      const w = Math.min(maxWidth, img.width)
+      const h = Math.round(img.height * (w / img.width))
       canvas.width = w
       canvas.height = h
       const tmp = document.createElement('canvas')
-      tmp.width = w; tmp.height = h
+      tmp.width = w
+      tmp.height = h
       const tctx = tmp.getContext('2d')
-      tctx.drawImage(img,0,0,w,h)
+      tctx.drawImage(img, 0, 0, w, h)
       await analyzeFrame(tmp)
       video.pause()
       video.srcObject = null
@@ -232,9 +372,9 @@
       wrap.appendChild(imgEl)
     })
 
-    openImageBtn.addEventListener('click', ()=> imageUpload.click())
+    openImageBtn.addEventListener('click', () => imageUpload.click())
 
-    captureBtn.addEventListener('click', ()=>{
+    captureBtn.addEventListener('click', () => {
       const wrap = document.getElementById('videoWrap')
       const out = document.createElement('canvas')
       out.width = canvas.width
@@ -242,27 +382,31 @@
       const ctx = out.getContext('2d')
       const uploaded = document.getElementById('uploadedPreview')
       if(uploaded){
-        ctx.drawImage(uploaded,0,0,out.width,out.height)
-      } else if(video && video.readyState>=2){
-        ctx.drawImage(video,0,0,out.width,out.height)
+        ctx.drawImage(uploaded, 0, 0, out.width, out.height)
+      } else if(video && video.readyState >= 2){
+        ctx.drawImage(video, 0, 0, out.width, out.height)
       } else {
-        ctx.fillStyle='#000'; ctx.fillRect(0,0,out.width,out.height)
+        ctx.fillStyle = '#000'
+        ctx.fillRect(0, 0, out.width, out.height)
       }
-      ctx.drawImage(canvas,0,0)
+      ctx.drawImage(canvas, 0, 0)
       const data = out.toDataURL('image/png')
       const w = window.open('about:blank')
       w.document.write(`<img src="${data}" alt="snapshot">`)
     })
 
-    downloadBtn.addEventListener('click', ()=>{
+    downloadBtn.addEventListener('click', () => {
       const out = document.createElement('canvas')
       out.width = canvas.width
       out.height = canvas.height
       const ctx = out.getContext('2d')
       const uploaded = document.getElementById('uploadedPreview')
-      if(uploaded){ ctx.drawImage(uploaded,0,0,out.width,out.height) }
-      else if(video && video.readyState>=2){ ctx.drawImage(video,0,0,out.width,out.height) }
-      ctx.drawImage(canvas,0,0)
+      if(uploaded){
+        ctx.drawImage(uploaded, 0, 0, out.width, out.height)
+      } else if(video && video.readyState >= 2){
+        ctx.drawImage(video, 0, 0, out.width, out.height)
+      }
+      ctx.drawImage(canvas, 0, 0)
       const a = document.createElement('a')
       a.href = out.toDataURL('image/png')
       a.download = 'face_result.png'
@@ -272,15 +416,15 @@
     startCamBtn.addEventListener('click', startCamera)
     stopCamBtn.addEventListener('click', stopCamera)
 
-    (async ()=>{
-      try{
+    (async () => {
+      try {
         await loadModels()
         const wrap = document.getElementById('videoWrap')
         const rect = wrap.getBoundingClientRect()
         canvas.width = rect.width
         canvas.height = rect.height
         statusEl.textContent = 'Ready — click Start Camera or upload an image'
-      }catch(err){
+      } catch(err) {
         statusEl.textContent = 'Model load failed: ' + err.message
         console.error(err)
       }
