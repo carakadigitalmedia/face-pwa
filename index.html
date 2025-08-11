@@ -11,14 +11,39 @@
   <link rel="icon" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
 
+  <!-- Untuk GitHub Pages -->
+  <base href="/face-pwa/">
+
   <!-- Styles -->
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      background: #121212;
+      color: white;
+    }
+    .video-wrap {
+      position: relative;
+      display: inline-block;
+    }
+    video, canvas {
+      border-radius: 8px;
+      max-width: 100%;
+      height: auto;
+    }
+    #info {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #ccc;
+    }
+  </style>
 </head>
 <body>
   <h1>Face Detection PWA</h1>
   <div class="video-wrap">
-    <video id="video" autoplay muted playsinline></video>
-    <canvas id="overlay"></canvas>
+    <video id="video" width="640" height="480" autoplay muted playsinline></video>
+    <canvas id="overlay" width="640" height="480"></canvas>
   </div>
   <p id="info">Memuat model... harap tunggu.</p>
 
@@ -27,10 +52,63 @@
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
   <!-- Main Script -->
-  <script src="script.js"></script>
-
-  <!-- Service Worker -->
   <script>
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const ctx = overlay.getContext('2d');
+    const info = document.getElementById('info');
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" }, audio: false
+        });
+        video.srcObject = stream;
+        info.textContent = "Kamera aktif, memuat model...";
+        await loadModels();
+      } catch (err) {
+        console.error(err);
+        info.textContent = "Izin kamera ditolak atau kamera tidak tersedia.";
+      }
+    }
+
+    async function loadModels() {
+      const MODEL_URL = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights";
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+      await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
+      info.textContent = "Model siap, mendeteksi wajah...";
+      detectFace();
+    }
+
+    async function detectFace() {
+      const displaySize = { width: video.width, height: video.height };
+      faceapi.matchDimensions(overlay, displaySize);
+
+      setInterval(async () => {
+        const detections = await faceapi
+          .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+          .withAgeAndGender();
+
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+        const resized = faceapi.resizeResults(detections, displaySize);
+        faceapi.draw.drawDetections(overlay, resized);
+
+        resized.forEach(det => {
+          const { age, gender, genderProbability } = det;
+          ctx.font = "14px Arial";
+          ctx.fillStyle = "yellow";
+          ctx.fillText(
+            `${Math.round(age)} tahun, ${gender} (${(genderProbability*100).toFixed(1)}%)`,
+            det.detection.box.x,
+            det.detection.box.y - 10
+          );
+        });
+      }, 500);
+    }
+
+    window.addEventListener('load', startCamera);
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js')
         .then(() => console.log('Service Worker registered'))
