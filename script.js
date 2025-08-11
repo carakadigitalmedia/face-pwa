@@ -3,69 +3,58 @@ const overlay = document.getElementById('overlay');
 const info = document.getElementById('info');
 const ctx = overlay.getContext('2d');
 
-async function loadModels() {
-  const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
-  info.textContent = 'Memuat model (face detection, expressions, age/gender)...';
-  await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-  await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
-  await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
-  info.textContent = 'Model siap. Mengakses kamera...';
-  startVideo();
-}
-
-function startVideo() {
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
-    .then(stream => {
-      video.srcObject = stream;
-      video.play();
-    })
-    .catch(err => {
-      console.error(err);
-      info.textContent = 'Error mengakses kamera: ' + err.message;
+// Fungsi minta izin kamera
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" }, // kamera depan
+      audio: false
     });
+    video.srcObject = stream;
+    info.textContent = "Kamera aktif, memuat model...";
+    await loadModels();
+  } catch (err) {
+    console.error(err);
+    info.textContent = "Izin kamera ditolak atau tidak tersedia.";
+  }
 }
 
-video.addEventListener('play', () => {
-  overlay.width = video.videoWidth || video.clientWidth;
-  overlay.height = video.videoHeight || video.clientHeight;
+// Load model face-api.js
+async function loadModels() {
+  const MODEL_URL = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights";
+  await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+  await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
+  info.textContent = "Model siap, mendeteksi wajah...";
+  detectFace();
+}
 
-  const loop = async () => {
-    if (video.paused || video.ended) return;
+// Deteksi wajah dan usia
+async function detectFace() {
+  const displaySize = { width: video.width, height: video.height };
+  faceapi.matchDimensions(overlay, displaySize);
+
+  setInterval(async () => {
     const detections = await faceapi
       .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
-      .withFaceExpressions()
       .withAgeAndGender();
 
     ctx.clearRect(0, 0, overlay.width, overlay.height);
-    if (detections && detections.length > 0) {
-      detections.forEach(det => {
-        const box = det.detection.box;
-        ctx.strokeStyle = '#00ff99';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(box.x, box.y, box.width, box.height);
-      });
-      faceapi.draw.drawFaceExpressions(overlay, detections);
 
-      const d = detections[0];
-      const age = d.age ? d.age.toFixed(0) : '–';
-      const gender = d.gender || '–';
-      const topEmotion = Object.entries(d.expressions || {neutral:0})
-        .sort((a,b)=>b[1]-a[1])[0];
-      const emoName = topEmotion ? topEmotion[0] : '–';
-      const emoProb = topEmotion ? (topEmotion[1]*100).toFixed(1) : '0.0';
+    const resized = faceapi.resizeResults(detections, displaySize);
+    faceapi.draw.drawDetections(overlay, resized);
 
-      info.textContent = `Usia: ${age} | Gender: ${gender} | Ekspresi: ${emoName} (${emoProb}%)`;
-    } else {
-      info.textContent = 'Tidak ada wajah terdeteksi';
-    }
-    requestAnimationFrame(loop);
-  };
-  loop();
-});
-
-// Register service worker if available
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+    resized.forEach(det => {
+      const { age, gender, genderProbability } = det;
+      ctx.font = "14px Arial";
+      ctx.fillStyle = "yellow";
+      ctx.fillText(
+        `${Math.round(age)} tahun, ${gender} (${(genderProbability*100).toFixed(1)}%)`,
+        det.detection.box.x,
+        det.detection.box.y - 10
+      );
+    });
+  }, 500);
 }
 
-loadModels();
+// Mulai kamera saat halaman load
+window.addEventListener('load', startCamera);
