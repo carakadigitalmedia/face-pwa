@@ -1,48 +1,325 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Face Detection PWA</title>
-
-  <!-- untuk GitHub Pages: ganti '/face-pwa/' sesuai nama repo jika perlu -->
-  <base href="/face-pwa/">
-
-  <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#1976d2" />
-  <link rel="icon" sizes="192x192" href="icons/icon-192.png" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
-
-  <link rel="stylesheet" href="style.css" />
+  <title>Face Detection & Age/Gender — Demo</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8;color-scheme:dark}
+    body{margin:0;font-family:Inter,Segoe UI,Roboto,system-ui,Arial;background:linear-gradient(180deg,#071127 0%, #071428 100%);color:#e6eef8;display:flex;gap:18px;min-height:100vh;align-items:flex-start;padding:24px}
+    .card{background:rgba(255,255,255,0.03);padding:14px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);width:760px}
+    h1{margin:0 0 8px;font-size:20px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+    button,input[type=file]{padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    button.primary{background:var(--accent);color:#042029;border:none}
+    #videoWrap{position:relative;width:720px;height:560px;background:#000;border-radius:8px;overflow:hidden}
+    video{width:100%;height:100%;object-fit:cover}
+    canvas{position:absolute;left:0;top:0}
+    .log{margin-top:12px;font-size:13px;color:var(--muted)}
+    .side{width:320px}
+    .info{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px}
+    .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,0.03)}
+    small{color:var(--muted)}
+    a.link{color:var(--accent);text-decoration:none}
+    footer{margin-top:12px;font-size:12px;color:var(--muted)}
+    .badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#06232a;color:#c7fff9;font-size:12px}
+  </style>
 </head>
 <body>
-  <header>
-    <h1>Face Detection PWA</h1>
-    <p id="info">Memuat... (izinkan kamera jika diminta)</p>
-  </header>
+  <div class="card">
+    <h1>Face Detection — Age & Gender (client-side)</h1>
+    <div class="controls">
+      <button id="startCam" class="primary">Start Camera</button>
+      <button id="stopCam">Stop Camera</button>
+      <label>
+        <input type="file" id="imageUpload" accept="image/*" style="display:none">
+        <button id="openImage">Open Image</button>
+      </label>
+      <button id="capture">Capture Snapshot</button>
+      <button id="download" title="Download overlay as PNG">Download Result</button>
+      <div style="flex:1"></div>
+      <div class="badge">face-api.js (client)</div>
+    </div>
 
-  <main>
-    <div class="video-wrap">
-      <video id="video" autoplay muted playsinline></video>
+    <div id="videoWrap">
+      <video id="inputVideo" autoplay muted playsinline></video>
       <canvas id="overlay"></canvas>
     </div>
-    <div class="controls">
-      <button id="btnToggle">Stop Camera</button>
+
+    <div class="log" id="log">Model status: <strong id="status">Not loaded</strong></div>
+
+    <div class="info" style="margin-top:12px">
+      <div class="row"><div>Detected faces</div><div id="faceCount">0</div></div>
+      <div class="row"><div>Average age (smoothed)</div><div id="avgAge">—</div></div>
+      <div class="row"><div>Last result</div><div id="lastResult">—</div></div>
     </div>
-  </main>
 
-  <!-- TensorFlow & face-api.js -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <footer>
+      <div>Catatan singkat: Aplikasi ini berjalan 100% di browser. Anda harus menyediakan file-model (folder <code>/models</code>) yang berisi model-model dari <code>face-api.js</code> (ageGender, tiny_face_detector, face_landmark_68, face_expression).</div>
+    </footer>
+  </div>
 
-  <script src="script.js"></script>
+  <div class="side">
+    <div class="card info">
+      <h3>Petunjuk pemasangan model</h3>
+      <ol>
+        <li>Download model pre-trained untuk <code>face-api.js</code> (mis. dari repository <em>justadudewhohacks/face-api.js</em>).</li>
+        <li>Tempatkan semua files model di folder <code>/models</code> pada lokasi yang sama dengan file HTML ini ketika disajikan (server/local).</li>
+        <li>Atau gunakan hosting model remote dan ubah <code>MODEL_URL</code> di kode JavaScript sesuai.</li>
+      </ol>
+      <h4>Fitur</h4>
+      <ul>
+        <li>Deteksi wajah realtime dari webcam</li>
+        <li>Estimasi usia (dengan smoothing)</li>
+        <li>Estimasi jenis kelamin</li>
+        <li>Ekspresi wajah (smile, sad, etc.)</li>
+        <li>Upload gambar & analisis</li>
+        <li>Snapshot & download hasil</li>
+      </ul>
+    </div>
+  </div>
 
+  <!--
+    IMPORTANT:
+    - Download models from the face-api.js repo and put them into /models
+      Example models you need:
+        - tiny_face_detector_model-weights_manifest.json (+ binary files)
+        - age_gender_model-weights_manifest.json
+        - face_landmark_68_model-weights_manifest.json
+        - face_expression_model-weights_manifest.json
+    - You can host this HTML on a local server (e.g. `http-server`, `python -m http.server`) or any static hosting. Browsers prevent getUserMedia on `file://`.
+  -->
+
+  <script src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js')
-        .then(() => console.log('Service Worker registered'))
-        .catch(err => console.warn('SW registration failed', err));
+    // Configuration
+    const MODEL_URL = './models' // adjust if you host models elsewhere
+    const video = document.getElementById('inputVideo')
+    const canvas = document.getElementById('overlay')
+    const startCamBtn = document.getElementById('startCam')
+    const stopCamBtn = document.getElementById('stopCam')
+    const openImageBtn = document.getElementById('openImage')
+    const imageUpload = document.getElementById('imageUpload')
+    const captureBtn = document.getElementById('capture')
+    const downloadBtn = document.getElementById('download')
+    const statusEl = document.getElementById('status')
+    const faceCountEl = document.getElementById('faceCount')
+    const avgAgeEl = document.getElementById('avgAge')
+    const lastResultEl = document.getElementById('lastResult')
+
+    let stream = null
+    let detectionInterval = null
+    let ageHistory = []
+    const AGE_HISTORY_LENGTH = 6
+
+    // Helper: smooth ages with simple moving average
+    function pushAge(age){
+      ageHistory.push(age)
+      if(ageHistory.length > AGE_HISTORY_LENGTH) ageHistory.shift()
+      const sum = ageHistory.reduce((a,b)=>a+b,0)
+      return sum/ageHistory.length
     }
+
+    async function loadModels(){
+      statusEl.textContent = 'Loading models...'
+      // load models. tinyFaceDetector is fast; use it for realtime
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL)
+      await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL)
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
+      await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
+      statusEl.textContent = 'Models loaded'
+    }
+
+    function resizeCanvasToDisplaySize(canvas){
+      const {width, height} = canvas.getBoundingClientRect()
+      if(canvas.width !== width || canvas.height !== height){
+        canvas.width = width
+        canvas.height = height
+      }
+    }
+
+    function drawDetections(detections, minConfidence=0.4){
+      const ctx = canvas.getContext('2d')
+      ctx.clearRect(0,0,canvas.width,canvas.height)
+      detections.forEach(det => {
+        const box = det.detection.box
+        ctx.strokeStyle = '#06b6d4'
+        ctx.lineWidth = Math.max(2, Math.round(box.width/120))
+        ctx.strokeRect(box.x, box.y, box.width, box.height)
+
+        // prepare label
+        const age = det.age
+        const gender = det.gender
+        const genderProb = det.genderProbability
+        const expr = det.expressions
+        const topExpression = Object.keys(expr).reduce((a,b)=> expr[a] > expr[b] ? a : b)
+
+        const label = `${Math.round(age)} yrs — ${gender} (${(genderProb*100).toFixed(0)}%) — ${topExpression}`
+
+        ctx.fillStyle = 'rgba(2,6,23,0.7)'
+        ctx.fillRect(box.x, box.y - 24, Math.min(360, box.width), 20)
+        ctx.fillStyle = '#dffaff'
+        ctx.font = '13px Inter, system-ui, Arial'
+        ctx.fillText(label, box.x + 6, box.y - 8)
+      })
+    }
+
+    async function analyzeFrame(input){
+      // input can be video element or image/canvas
+      const options = new faceapi.TinyFaceDetectorOptions({inputSize: 512, scoreThreshold: 0.5})
+      const results = await faceapi.detectAllFaces(input, options)
+        .withAgeAndGender()
+        .withFaceLandmarks()
+        .withFaceExpressions()
+
+      // convert ages for smoothing
+      const annotated = results.map(r => ({
+        detection: r.detection,
+        age: r.age || 0,
+        gender: r.gender || 'unknown',
+        genderProbability: r.genderProbability || 0,
+        expressions: r.expressions || {}
+      }))
+
+      // draw
+      drawDetections(annotated)
+      faceCountEl.textContent = annotated.length
+
+      if(annotated.length>0){
+        const ages = annotated.map(a=>a.age)
+        const avg = pushAge(ages.reduce((s,v)=>s+v,0)/ages.length)
+        avgAgeEl.textContent = `${avg.toFixed(1)} years`
+        lastResultEl.textContent = `${annotated.length} face(s) — ${annotated[0].gender} — ${Object.keys(annotated[0].expressions).reduce((a,b)=> annotated[0].expressions[a]>annotated[0].expressions[b]?a:b)} `
+      } else {
+        lastResultEl.textContent = 'No faces'
+      }
+    }
+
+    async function startCamera(){
+      if(stream) return
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:1280, height:720}, audio:false})
+        video.srcObject = stream
+        await video.play()
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        // run detections regularly
+        detectionInterval = setInterval(async ()=>{
+          if(video.readyState < 2) return
+          await analyzeFrame(video)
+        }, 300) // every 300ms
+      }catch(err){
+        alert('Gagal mengakses kamera: ' + err.message)
+        console.error(err)
+      }
+    }
+
+    function stopCamera(){
+      if(stream){
+        stream.getTracks().forEach(t=>t.stop())
+        stream = null
+      }
+      if(detectionInterval) clearInterval(detectionInterval)
+      detectionInterval = null
+      const ctx = canvas.getContext('2d')
+      ctx.clearRect(0,0,canvas.width,canvas.height)
+      faceCountEl.textContent = '0'
+      avgAgeEl.textContent = '—'
+      lastResultEl.textContent = '—'
+    }
+
+    // handle image upload
+    imageUpload.addEventListener('change', async ()=>{
+      const file = imageUpload.files[0]
+      if(!file) return
+      const img = await faceapi.bufferToImage(file)
+      // fit canvas to image
+      const ctx = canvas.getContext('2d')
+      const w = Math.min(1280, img.width)
+      const h = Math.round(img.height * (w/img.width))
+      canvas.width = w
+      canvas.height = h
+      // draw image to hidden canvas to use for detection
+      const tmp = document.createElement('canvas')
+      tmp.width = w; tmp.height = h
+      const tctx = tmp.getContext('2d')
+      tctx.drawImage(img,0,0,w,h)
+      await analyzeFrame(tmp)
+      // also draw the image behind overlay: put image in video element by pausing stream-less playback
+      video.pause()
+      video.srcObject = null
+      video.style.display = 'none'
+      // create image element to show in place of video
+      const imgEl = document.createElement('img')
+      imgEl.src = tmp.toDataURL('image/png')
+      imgEl.style.width = '100%'
+      imgEl.style.height = '100%'
+      imgEl.id = 'uploadedPreview'
+      const wrap = document.getElementById('videoWrap')
+      // remove previous preview if any
+      const prev = document.getElementById('uploadedPreview')
+      if(prev) prev.remove()
+      wrap.appendChild(imgEl)
+    })
+
+    openImageBtn.addEventListener('click', ()=> imageUpload.click())
+
+    captureBtn.addEventListener('click', ()=>{
+      // capture overlay + video/image into one canvas and open in new tab
+      const wrap = document.getElementById('videoWrap')
+      const out = document.createElement('canvas')
+      out.width = canvas.width
+      out.height = canvas.height
+      const ctx = out.getContext('2d')
+      // draw background: either video frame or uploaded preview
+      const uploaded = document.getElementById('uploadedPreview')
+      if(uploaded){
+        ctx.drawImage(uploaded,0,0,out.width,out.height)
+      } else if(video && video.readyState>=2){
+        ctx.drawImage(video,0,0,out.width,out.height)
+      } else {
+        ctx.fillStyle='#000'; ctx.fillRect(0,0,out.width,out.height)
+      }
+      ctx.drawImage(canvas,0,0)
+      const data = out.toDataURL('image/png')
+      const w = window.open('about:blank')
+      w.document.write(`<img src="${data}" alt="snapshot">`)
+    })
+
+    downloadBtn.addEventListener('click', ()=>{
+      const out = document.createElement('canvas')
+      out.width = canvas.width
+      out.height = canvas.height
+      const ctx = out.getContext('2d')
+      const uploaded = document.getElementById('uploadedPreview')
+      if(uploaded){ ctx.drawImage(uploaded,0,0,out.width,out.height) }
+      else if(video && video.readyState>=2){ ctx.drawImage(video,0,0,out.width,out.height) }
+      ctx.drawImage(canvas,0,0)
+      const a = document.createElement('a')
+      a.href = out.toDataURL('image/png')
+      a.download = 'face_result.png'
+      a.click()
+    })
+
+    startCamBtn.addEventListener('click', startCamera)
+    stopCamBtn.addEventListener('click', stopCamera)
+
+    // load models on page load
+    (async ()=>{
+      try{
+        await loadModels()
+        // adjust canvas size to wrapper
+        const wrap = document.getElementById('videoWrap')
+        const rect = wrap.getBoundingClientRect()
+        canvas.width = rect.width
+        canvas.height = rect.height
+        // try to warm up webcam permission prompt (optional)
+        statusEl.textContent = 'Ready — click Start Camera or upload an image'
+      }catch(err){
+        statusEl.textContent = 'Model load failed: ' + err.message
+        console.error(err)
+      }
+    })()
   </script>
 </body>
 </html>
