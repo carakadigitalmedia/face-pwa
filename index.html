@@ -72,28 +72,16 @@
         <li>Deteksi wajah realtime dari webcam</li>
         <li>Estimasi usia (dengan smoothing)</li>
         <li>Estimasi jenis kelamin</li>
-        <li>Ekspresi wajah (smile, sad, etc.)</li>
+        <li>Ekspresi wajah (smile, sad, dll.)</li>
         <li>Upload gambar & analisis</li>
         <li>Snapshot & download hasil</li>
       </ul>
     </div>
   </div>
 
-  <!--
-    IMPORTANT:
-    - Download models from the face-api.js repo and put them into /models
-      Example models you need:
-        - tiny_face_detector_model-weights_manifest.json (+ binary files)
-        - age_gender_model-weights_manifest.json
-        - face_landmark_68_model-weights_manifest.json
-        - face_expression_model-weights_manifest.json
-    - You can host this HTML on a local server (e.g. `http-server`, `python -m http.server`) or any static hosting. Browsers prevent getUserMedia on `file://`.
-  -->
-
   <script src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <script>
-    // Configuration
-    const MODEL_URL = './models' // adjust if you host models elsewhere
+    const MODEL_URL = './models'
     const video = document.getElementById('inputVideo')
     const canvas = document.getElementById('overlay')
     const startCamBtn = document.getElementById('startCam')
@@ -112,7 +100,6 @@
     let ageHistory = []
     const AGE_HISTORY_LENGTH = 6
 
-    // Helper: smooth ages with simple moving average
     function pushAge(age){
       ageHistory.push(age)
       if(ageHistory.length > AGE_HISTORY_LENGTH) ageHistory.shift()
@@ -122,7 +109,6 @@
 
     async function loadModels(){
       statusEl.textContent = 'Loading models...'
-      // load models. tinyFaceDetector is fast; use it for realtime
       await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL)
       await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL)
       await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
@@ -130,15 +116,7 @@
       statusEl.textContent = 'Models loaded'
     }
 
-    function resizeCanvasToDisplaySize(canvas){
-      const {width, height} = canvas.getBoundingClientRect()
-      if(canvas.width !== width || canvas.height !== height){
-        canvas.width = width
-        canvas.height = height
-      }
-    }
-
-    function drawDetections(detections, minConfidence=0.4){
+    function drawDetections(detections){
       const ctx = canvas.getContext('2d')
       ctx.clearRect(0,0,canvas.width,canvas.height)
       detections.forEach(det => {
@@ -147,7 +125,6 @@
         ctx.lineWidth = Math.max(2, Math.round(box.width/120))
         ctx.strokeRect(box.x, box.y, box.width, box.height)
 
-        // prepare label
         const age = det.age
         const gender = det.gender
         const genderProb = det.genderProbability
@@ -165,14 +142,12 @@
     }
 
     async function analyzeFrame(input){
-      // input can be video element or image/canvas
       const options = new faceapi.TinyFaceDetectorOptions({inputSize: 512, scoreThreshold: 0.5})
       const results = await faceapi.detectAllFaces(input, options)
         .withAgeAndGender()
         .withFaceLandmarks()
         .withFaceExpressions()
 
-      // convert ages for smoothing
       const annotated = results.map(r => ({
         detection: r.detection,
         age: r.age || 0,
@@ -181,15 +156,14 @@
         expressions: r.expressions || {}
       }))
 
-      // draw
       drawDetections(annotated)
       faceCountEl.textContent = annotated.length
 
-      if(annotated.length>0){
+      if(annotated.length > 0){
         const ages = annotated.map(a=>a.age)
         const avg = pushAge(ages.reduce((s,v)=>s+v,0)/ages.length)
         avgAgeEl.textContent = `${avg.toFixed(1)} years`
-        lastResultEl.textContent = `${annotated.length} face(s) — ${annotated[0].gender} — ${Object.keys(annotated[0].expressions).reduce((a,b)=> annotated[0].expressions[a]>annotated[0].expressions[b]?a:b)} `
+        lastResultEl.textContent = `${annotated.length} face(s) — ${annotated[0].gender} — ${Object.keys(annotated[0].expressions).reduce((a,b)=> annotated[0].expressions[a]>annotated[0].expressions[b]?a:b)}`
       } else {
         lastResultEl.textContent = 'No faces'
       }
@@ -203,11 +177,10 @@
         await video.play()
         canvas.width = video.videoWidth
         canvas.height = video.videoHeight
-        // run detections regularly
         detectionInterval = setInterval(async ()=>{
           if(video.readyState < 2) return
           await analyzeFrame(video)
-        }, 300) // every 300ms
+        }, 300)
       }catch(err){
         alert('Gagal mengakses kamera: ' + err.message)
         console.error(err)
@@ -226,37 +199,34 @@
       faceCountEl.textContent = '0'
       avgAgeEl.textContent = '—'
       lastResultEl.textContent = '—'
+      video.style.display = ''
+      const uploaded = document.getElementById('uploadedPreview')
+      if(uploaded) uploaded.remove()
     }
 
-    // handle image upload
     imageUpload.addEventListener('change', async ()=>{
       const file = imageUpload.files[0]
       if(!file) return
       const img = await faceapi.bufferToImage(file)
-      // fit canvas to image
       const ctx = canvas.getContext('2d')
       const w = Math.min(1280, img.width)
       const h = Math.round(img.height * (w/img.width))
       canvas.width = w
       canvas.height = h
-      // draw image to hidden canvas to use for detection
       const tmp = document.createElement('canvas')
       tmp.width = w; tmp.height = h
       const tctx = tmp.getContext('2d')
       tctx.drawImage(img,0,0,w,h)
       await analyzeFrame(tmp)
-      // also draw the image behind overlay: put image in video element by pausing stream-less playback
       video.pause()
       video.srcObject = null
       video.style.display = 'none'
-      // create image element to show in place of video
       const imgEl = document.createElement('img')
       imgEl.src = tmp.toDataURL('image/png')
       imgEl.style.width = '100%'
       imgEl.style.height = '100%'
       imgEl.id = 'uploadedPreview'
       const wrap = document.getElementById('videoWrap')
-      // remove previous preview if any
       const prev = document.getElementById('uploadedPreview')
       if(prev) prev.remove()
       wrap.appendChild(imgEl)
@@ -265,13 +235,11 @@
     openImageBtn.addEventListener('click', ()=> imageUpload.click())
 
     captureBtn.addEventListener('click', ()=>{
-      // capture overlay + video/image into one canvas and open in new tab
       const wrap = document.getElementById('videoWrap')
       const out = document.createElement('canvas')
       out.width = canvas.width
       out.height = canvas.height
       const ctx = out.getContext('2d')
-      // draw background: either video frame or uploaded preview
       const uploaded = document.getElementById('uploadedPreview')
       if(uploaded){
         ctx.drawImage(uploaded,0,0,out.width,out.height)
@@ -304,16 +272,13 @@
     startCamBtn.addEventListener('click', startCamera)
     stopCamBtn.addEventListener('click', stopCamera)
 
-    // load models on page load
     (async ()=>{
       try{
         await loadModels()
-        // adjust canvas size to wrapper
         const wrap = document.getElementById('videoWrap')
         const rect = wrap.getBoundingClientRect()
         canvas.width = rect.width
         canvas.height = rect.height
-        // try to warm up webcam permission prompt (optional)
         statusEl.textContent = 'Ready — click Start Camera or upload an image'
       }catch(err){
         statusEl.textContent = 'Model load failed: ' + err.message
